@@ -30,113 +30,44 @@ interface HistoryItem {
 }
 
 // ==========================================
-// MOTOR LOCAL AUTOMÁTICO (Fallback Offline) - BLINDADO CONTRA ERROS SEMÂNTICOS
+// MOTOR LOCAL AUTOMÁTICO (Fallback Offline)
 // ==========================================
 const runLocalSecurityChecks = (code: string): DiagnosticError[] => {
   const localErrors: DiagnosticError[] = [];
   const normalizedCode = code.toLowerCase();
 
-  // 1. Validação de Imagem (Ausência ou termos genéricos/redundantes)
   if (normalizedCode.includes('<img')) {
     const imgMatches = code.match(/<img[^>]*>/gi) || [];
     imgMatches.forEach((img, index) => {
       const altMatch = img.match(/alt=["']([^"']*)["']/i);
-      
       if (!altMatch) {
         localErrors.push({
           id: `local-err-img-missing-${index}`,
-          rule: 'Imagem sem texto alternativo (alt)',
+          rule: 'WCAG 1.1.1 - Imagem sem texto alternativo (alt)',
           severity: 'critical',
           message: 'Foi encontrada uma tag <img> sem o atributo alt. Usuários de leitores de tela não sabem o que ela representa.',
           codeSnippet: img,
           suggestion: 'Adicione o atributo alt="..." descrevendo a imagem de forma clara.'
         });
-      } else {
-        const altValue = altMatch[1].trim().toLowerCase();
-        const genericTerms = ['imagem', 'foto', 'figura', 'graphics', 'picture', 'screenshot'];
-        if (genericTerms.includes(altValue)) {
-          localErrors.push({
-            id: `local-err-img-generic-${index}`,
-            rule: 'Atributo alt com texto genérico/redundante',
-            severity: 'critical',
-            message: `A imagem utiliza alt="${altMatch[1]}". Dizer apenas que é uma imagem é redundante e não ajuda na acessibilidade.`,
-            codeSnippet: img,
-            suggestion: 'Substitua por um texto descritivo. Ex: alt="Notebook gamer preto com teclado retroiluminado aceso".'
-          });
-        }
       }
     });
   }
 
-  // 2. Validação de Termos Vagos em Links, Botões ou aria-labels
-  const vagueTerms = ['clique aqui', 'saiba mais', 'ok', 'campo', 'botão', 'clique', 'here'];
-  
-  // Validando textos dentro de links <a>
+  const vagueTerms = ['clique aqui', 'saiba mais', 'ok', 'clique'];
   if (normalizedCode.includes('<a')) {
     const linkMatches = code.match(/<a[^>]*>([\s\S]*?)<\/a>/gi) || [];
     linkMatches.forEach((link, index) => {
       const linkText = link.replace(/<[^>]*>/g, '').trim().toLowerCase();
-      const ariaLabelMatch = link.match(/aria-label=["']([^"']*)["']/i);
-      const labelValue = ariaLabelMatch ? ariaLabelMatch[1].trim().toLowerCase() : '';
-
-      if (vagueTerms.includes(linkText) || vagueTerms.includes(labelValue)) {
+      if (vagueTerms.includes(linkText)) {
         localErrors.push({
           id: `local-err-vague-link-${index}`,
-          rule: 'Texto ou label de link pouco descritivo',
+          rule: 'WCAG 2.4.4 - Texto de link pouco descritivo',
           severity: 'warning',
-          message: 'O link ou o seu aria-label usa expressões vagas que não informam o destino do usuário fora de contexto.',
+          message: 'O link usa expressões vagas que não informam o destino do usuário fora de contexto.',
           codeSnippet: link,
-          suggestion: 'Torne o texto explícito sobre o destino. Em vez de "Saiba mais", use "Saiba mais sobre o Notebook Gamer".'
+          suggestion: 'Torne o texto explícito sobre o destino. Em vez de "Saiba mais", use "Saiba mais sobre o produto".'
         });
       }
-    });
-  }
-
-  // Validando textos dentro de botões <button>
-  if (normalizedCode.includes('<button')) {
-    const btnMatches = code.match(/<button[^>]*>([\s\S]*?)<\/button>/gi) || [];
-    btnMatches.forEach((btn, index) => {
-      const btnText = btn.replace(/<[^>]*>/g, '').trim().toLowerCase();
-      const ariaLabelMatch = btn.match(/aria-label=["']([^"']*)["']/i);
-      const labelValue = ariaLabelMatch ? ariaLabelMatch[1].trim().toLowerCase() : '';
-
-      if (vagueTerms.includes(btnText) || vagueTerms.includes(labelValue) || btnText === '') {
-        localErrors.push({
-          id: `local-err-vague-btn-${index}`,
-          rule: 'Botão sem contexto ou texto acessível claro',
-          severity: 'warning',
-          message: 'O botão possui um rótulo genérico ou vazio (ex: "OK" ou apenas um ícone), dificultando o entendimento da sua ação.',
-          codeSnippet: btn,
-          suggestion: 'Insira um texto claro na label ou no conteúdo interno do botão. Ex: "Enviar formulário de novidades".'
-        });
-      }
-    });
-  }
-
-  // 3. Validação de Div/Span com comportamento de Botão (Semântica Quebrada)
-  if (normalizedCode.includes('role="button"') || normalizedCode.includes("role='button'")) {
-    const elements = code.match(/<(div|span)[^>]*role=["']button["'][^>]*>([\s\S]*?)<\/\1>/gi) || [];
-    elements.forEach((elem, index) => {
-      localErrors.push({
-        id: `local-err-semantic-button-${index}`,
-        rule: 'Elemento genérico simulando botão',
-        severity: 'critical',
-        message: 'O uso de <div> ou <span> com role="button" é uma má prática. Elementos não-semânticos exigem tratamento manual de teclado para as teclas Enter e Espaço.',
-        codeSnippet: elem,
-        suggestion: 'Substitua a tag <div> ou <span> diretamente pela tag nativa <button>. Ela já possui acessibilidade de teclado e foco automática.'
-      });
-    });
-  }
-
-  // 4. Validação Básica de Hierarquia de Títulos
-  if (normalizedCode.includes('<h1') && normalizedCode.includes('<h3') && !normalizedCode.includes('<h2')) {
-    localErrors.push({
-      id: 'local-err-hierarchy',
-      rule: 'Hierarquia de títulos saltada',
-      severity: 'info',
-      message: 'O código pula de um título principal (H1) direto para um subtítulo de terceiro nível (H3). Isso confunde leitores de tela.',
-      codeSnippet: '<h1>...</h1> e <h3>...</h3> encontrados sem um <h2>',
-      suggestion: 'Altere a ordem ou ajuste a tag para <h2> para manter a sequência lógica estrutural.'
     });
   }
 
@@ -158,10 +89,23 @@ export default function App() {
     setLoading(true)
 
     const localIssues = runLocalSecurityChecks(codeInput)
-    
-    // Configurações de Segurança puxando dinamicamente do .env.local
     const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
-    const SYSTEM_PROMPT = import.meta.env.VITE_A11Y_PROMPT || "Você é um validador de acessibilidade automatizado (WCAG 2.2). Identifique erros como falta de 'alt', botões sem label e quebras de hierarquia. Retorne obrigatoriamente as respostas estruturadas em formato JSON válido e em português do Brasil.";
+    
+    // Prompt Sênior adaptado perfeitamente para as chaves do objeto do Front-end
+    const SYSTEM_PROMPT = `Você é um auditor sênior de acessibilidade digital especialista em WCAG 2.1 (Níveis A e AA). Analise o código HTML fornecido e mapeie estritamente os seguintes problemas:
+1) Formulários: <input>, <select> e <textarea> sem <label> associado através de ID (ou sem atributo aria-label).
+2) Headings: Múltiplos tags <h1>, saltos incorretos na hierarquia semântica (ex: <h1> direto para <h3>) e headings vazios.
+3) Estrutura: Ausência de tags semânticas estruturais principais como <main>, <nav>, <header> e <footer>.
+4) Teclado: Uso de tags não-semânticas (<div>, <span>) simulando botões com role="button" sem tratamento de tabindex.
+5) Imagens e Links: Atributos alt ausentes ou com textos redundantes ("foto", "imagem"). Links com textos vagos ("clique aqui", "saiba mais").
+6) Tabelas: Elementos <table> estruturados que não possuam tags <th> para cabeçalhos.
+
+Você DEVE preencher o array de "errors" seguindo exatamente esta estrutura:
+- "rule": O nome da regra violada + a referência da especificação WCAG (Ex: "WCAG 1.3.1 - Info and Relationships").
+- "severity": Use estritamente "critical" (para erros de formulário, alt e botões falsos) ou "warning" (para links vagos e saltos de títulos).
+- "message": Explicação detalhada e didática do motivo do erro.
+- "codeSnippet": O trecho de código exato que causou o problema.
+- "suggestion": O código HTML corrigido pronto para substituição.`;
 
     try {
       const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY })
@@ -171,7 +115,7 @@ export default function App() {
         model: 'gemini-1.5-flash',
         contents: prompt,
         config: {
-          systemInstruction: SYSTEM_PROMPT, // 🔥 AGORA LÊ AS REGRAS RÍGIDAS OCULTAS DO PROMPT DO SEU .ENV!
+          systemInstruction: SYSTEM_PROMPT,
           responseMimeType: 'application/json',
           responseSchema: {
             type: Type.OBJECT,
@@ -204,7 +148,6 @@ export default function App() {
       if (response.text) {
         let result = JSON.parse(response.text) as AnalysisResult
         
-        // Se a IA ignorar as regras rígidas por algum motivo, mesclamos os erros do motor local para garantir
         if (localIssues.length > 0 && result.errors.length === 0) {
           result = {
             ...result,
@@ -228,14 +171,14 @@ export default function App() {
           id: "err-api-fallback",
           rule: "Conexão instável (Motor Local Ativado)",
           severity: "warning",
-          message: "O Gemini não respondeu devido à falta de chaves de API válidas no servidor ou limite excedido. O motor offline avaliou a estrutura básica.",
+          message: "O Gemini não respondeu devido à falta de chaves de API válidas ou limite excedido.",
           codeSnippet: "Fallback Ativo",
-          suggestion: "Se você estiver rodando em produção, certifique-se de configurar as variáveis de ambiente VITE_GEMINI_API_KEY no painel da hospedagem."
+          suggestion: "Verifique suas configurações de ambiente."
         }]
       }
       updateAppStats(fallbackResult, codeInput)
     } finally {
-      setLoading(false)
+      loading && setLoading(false)
     }
   }
 
@@ -271,8 +214,6 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
-      
-      {/* 🧭 BARRA LATERAL (HISTÓRICO) */}
       <aside className="w-64 bg-slate-900 border-r border-slate-800 p-4 flex flex-col justify-between hidden md:flex">
         <div>
           <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Histórico de Análises</h2>
@@ -296,11 +237,8 @@ export default function App() {
         <div className="text-[10px] text-slate-500 border-t border-slate-800 pt-2 text-center font-mono">v1.2.0 - Motor Híbrido Protegido</div>
       </aside>
 
-      {/* 💻 PAINEL CENTRAL */}
       <main className="flex-1 overflow-y-auto p-4 sm:p-8">
         <div className="max-w-4xl mx-auto">
-          
-          {/* TOPO */}
           <header className="flex justify-between items-center mb-6 border-b border-slate-900 pb-4">
             <div>
               <h1 className="text-xl font-extrabold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">♿ A11yCopilot</h1>
@@ -314,7 +252,6 @@ export default function App() {
             </button>
           </header>
 
-          {/* CAIXA DE ENTRADA DO CÓDIGO */}
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl">
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Cole o seu código HTML ou React:</h2>
             <textarea
@@ -332,7 +269,6 @@ export default function App() {
             </button>
           </div>
 
-          {/* EXIBIÇÃO DE RESULTADOS */}
           {currentResult && (
             <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl mt-6">
               <div className="flex justify-between items-center mb-4 border-b border-slate-800 pb-3">
@@ -347,7 +283,6 @@ export default function App() {
                 </button>
               </div>
 
-              {/* PLACAR */}
               <div className="grid grid-cols-3 gap-3 mb-5 text-center">
                 <div className="bg-slate-950 p-3 rounded-lg border border-slate-850">
                   <div className="text-[10px] text-slate-500 font-bold uppercase">Score</div>
@@ -363,12 +298,10 @@ export default function App() {
                 </div>
               </div>
 
-              {/* AVISO PERMANENTE DE CONTRASTE VISUAL (BOAS PRÁTICAS) */}
               <div className="mb-4 p-3 bg-blue-500/5 border border-blue-500/20 text-blue-400 text-xs rounded-lg">
                 🎨 <strong>Dica de Contraste:</strong> Lembre-se que validadores estáticos de código não conseguem ler as cores renderizadas na tela. Use a ferramenta de inspeção do Chrome/DevTools para garantir um contraste mínimo de <strong>4.5:1</strong> nos textos!
               </div>
 
-              {/* LISTAGEM DE ERROS */}
               <div className="space-y-3">
                 {currentResult.errors.length === 0 ? (
                   <p className="text-xs text-emerald-400 bg-emerald-500/5 p-3 rounded-lg text-center border border-emerald-500/10">✨ Nenhum problema encontrado! Código limpo e de acordo com as boas práticas.</p>
@@ -394,7 +327,6 @@ export default function App() {
         </div>
       </main>
 
-      {/* 📜 MODAL DO MANUAL DE AJUDA */}
       {isHelpOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-5 shadow-2xl space-y-4">
