@@ -238,5 +238,88 @@ export const runLocalSecurityChecks = (code: string): DiagnosticError[] => {
     }
   });
 
+  // 10. iframes sem title
+  if (norm.includes('<iframe')) {
+    const iframes = code.match(/<iframe[^>]*>/gi) || [];
+    iframes.forEach((iframe, i) => {
+      if (!/title=/i.test(iframe)) {
+        const fixed = iframe.replace('>', ' title="Descrição do conteúdo do frame">');
+        errors.push({
+          id: `local-iframe-notitle-${i}`,
+          rule: 'WCAG 2.4.1 - iframe sem atributo title',
+          severity: 'critical',
+          message: 'Elemento <iframe> sem title. Leitores de tela não identificam o conteúdo incorporado.',
+          codeSnippet: iframe,
+          fixedSnippet: fixed,
+          suggestion: `Adicione title descritivo: ${fixed}`,
+          source: 'local',
+        });
+      }
+    });
+  }
+
+  // 11. role ARIA inválido
+  const validRoles = new Set([
+    'alert','alertdialog','application','article','banner','button','cell',
+    'checkbox','columnheader','combobox','complementary','contentinfo','definition',
+    'dialog','document','feed','figure','form','grid','gridcell','group','heading',
+    'img','link','list','listbox','listitem','log','main','marquee','math','menu',
+    'menubar','menuitem','menuitemcheckbox','menuitemradio','navigation','none',
+    'note','option','presentation','progressbar','radio','radiogroup','region',
+    'row','rowgroup','rowheader','scrollbar','search','searchbox','separator',
+    'slider','spinbutton','status','switch','tab','table','tablist','tabpanel',
+    'term','textbox','timer','toolbar','tooltip','tree','treegrid','treeitem',
+  ]);
+  const roleMatches = code.match(/role=["'][^"']+["']/gi) || [];
+  roleMatches.forEach((attr, i) => {
+    const val = attr.match(/role=["']([^"']+)["']/i)?.[1] || '';
+    if (!validRoles.has(val.toLowerCase().trim())) {
+      errors.push({
+        id: `local-invalid-role-${i}`,
+        rule: 'WCAG 4.1.2 - Valor de role ARIA inválido',
+        severity: 'warning',
+        message: `role="${val}" não é um valor ARIA reconhecido. Leitores de tela podem ignorar ou processar incorretamente.`,
+        codeSnippet: attr,
+        fixedSnippet: `role="button" /* substitua pelo role correto */`,
+        suggestion: 'Use roles válidos: button, link, navigation, dialog, alert, tab, tabpanel, etc.',
+        source: 'local',
+      });
+    }
+  });
+
+  // 12. aria-hidden em elemento focável
+  const ariaHiddenFocusable = code.match(/<(?:button|a|input|select|textarea)[^>]*aria-hidden=["']true["'][^>]*>/gi) || [];
+  ariaHiddenFocusable.forEach((el, i) => {
+    errors.push({
+      id: `local-aria-hidden-focusable-${i}`,
+      rule: 'WCAG 4.1.2 - aria-hidden em elemento focável',
+      severity: 'critical',
+      message: 'Elemento focável (button/a/input) com aria-hidden="true". Isso prende o foco de leitores de tela em elementos invisíveis.',
+      codeSnippet: el,
+      fixedSnippet: el.replace(/\s*aria-hidden=["']true["']/, ' tabindex="-1"'),
+      suggestion: 'Remova aria-hidden="true" de elementos focáveis, ou adicione tabindex="-1" para removê-los do fluxo de foco.',
+      source: 'local',
+    });
+  });
+
+  // 13. Vídeo sem controls
+  if (norm.includes('<video')) {
+    const videos = code.match(/<video[^>]*>/gi) || [];
+    videos.forEach((video, i) => {
+      if (!/\bcontrols\b/i.test(video)) {
+        errors.push({
+          id: `local-video-nocontrols-${i}`,
+          rule: 'WCAG 1.2.2 - Vídeo sem atributo controls',
+          severity: 'warning',
+          message: 'Elemento <video> sem controls. Usuários de teclado não conseguem pausar ou controlar o vídeo.',
+          codeSnippet: video,
+          fixedSnippet: video.replace('>', ' controls>'),
+          suggestion: 'Adicione o atributo controls: <video controls ...>.',
+          source: 'local',
+        });
+      }
+    });
+  }
+
   return errors;
 };

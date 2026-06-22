@@ -6,8 +6,8 @@ export interface DiagnosticError {
   codeSnippet: string;
   suggestion: string;
   location?: string;
-  fixedSnippet?: string;  // trecho corrigido individual
-  source?: 'ai' | 'local'; // qual motor detectou
+  fixedSnippet?: string;
+  source?: 'ai' | 'local';
 }
 
 export interface AnalysisResult {
@@ -15,7 +15,7 @@ export interface AnalysisResult {
   passed: number;
   failed: number;
   errors: DiagnosticError[];
-  fixedCode: string; // HTML completo corrigido
+  fixedCode: string;
 }
 
 export interface HistoryItem {

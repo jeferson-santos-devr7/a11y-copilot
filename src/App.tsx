@@ -1,5 +1,4 @@
 import { useState, useRef } from 'react'
-import { GoogleGenAI, Type } from '@google/genai'
 import type { DiagnosticError, AnalysisResult, HistoryItem } from './types'
 import { runLocalSecurityChecks } from './utils/localEngine'
 
@@ -80,66 +79,32 @@ export default function App() {
     setUsedFallback(false)
 
     const localIssues = runLocalSecurityChecks(codeInput)
-    const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || ''
-    const SYSTEM_PROMPT  = import.meta.env.VITE_A11Y_PROMPT ||
-      `Você é um auditor sênior de acessibilidade WCAG 2.1. Para cada erro retorne:
-id, rule (WCAG X.X.X - nome), severity (critical ou warning),
-message (explicação didática), codeSnippet (trecho exato),
-fixedSnippet (trecho corrigido pronto para substituição), suggestion (instrução), location.`
 
     try {
-      const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY })
-      const response = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
-        contents: `Analise o código HTML/React abaixo e retorne relatório de acessibilidade em JSON:\n\n${codeInput}`,
-        config: {
-          systemInstruction: SYSTEM_PROMPT,
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              score:     { type: Type.INTEGER },
-              passed:    { type: Type.INTEGER },
-              failed:    { type: Type.INTEGER },
-              fixedCode: { type: Type.STRING },
-              errors: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id:           { type: Type.STRING },
-                    rule:         { type: Type.STRING },
-                    severity:     { type: Type.STRING, enum: ['critical', 'warning', 'info'] },
-                    message:      { type: Type.STRING },
-                    codeSnippet:  { type: Type.STRING },
-                    fixedSnippet: { type: Type.STRING },
-                    suggestion:   { type: Type.STRING },
-                    location:     { type: Type.STRING },
-                  },
-                  required: ['id', 'rule', 'severity', 'message', 'codeSnippet', 'suggestion'],
-                },
-              },
-            },
-            required: ['score', 'passed', 'failed', 'errors', 'fixedCode'],
-          },
-        },
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codeInput }),
       })
 
-      if (response.text) {
-        const aiResult = JSON.parse(response.text) as AnalysisResult
-        aiResult.errors = aiResult.errors.map(e => ({ ...e, source: 'ai' as const }))
-        const aiRules   = new Set(aiResult.errors.map(e => e.rule.toLowerCase()))
-        const uniqueLocal = localIssues.filter(e => !aiRules.has(e.rule.toLowerCase()))
-        const merged    = [...aiResult.errors, ...uniqueLocal]
-        const penalty   = merged.reduce((acc, e) => acc + (e.severity === 'critical' ? 15 : 8), 0)
-        finalize({
-          ...aiResult,
-          errors: merged,
-          failed: merged.length,
-          passed: Math.max(0, aiResult.passed),
-          score:  Math.max(0, Math.min(100, 100 - penalty)),
-        })
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}))
+        throw new Error(errBody.error || `Erro ${res.status} ao consultar o servidor`)
       }
+
+      const aiResult = (await res.json()) as AnalysisResult
+      aiResult.errors = aiResult.errors.map(e => ({ ...e, source: 'ai' as const }))
+      const aiRules   = new Set(aiResult.errors.map(e => e.rule.toLowerCase()))
+      const uniqueLocal = localIssues.filter(e => !aiRules.has(e.rule.toLowerCase()))
+      const merged    = [...aiResult.errors, ...uniqueLocal]
+      const penalty   = merged.reduce((acc, e) => acc + (e.severity === 'critical' ? 15 : 8), 0)
+      finalize({
+        ...aiResult,
+        errors: merged,
+        failed: merged.length,
+        passed: Math.max(0, aiResult.passed),
+        score:  Math.max(0, Math.min(100, 100 - penalty)),
+      })
     } catch (err) {
       console.error('Motor Local ativado:', err)
       setUsedFallback(true)
@@ -153,10 +118,10 @@ fixedSnippet (trecho corrigido pronto para substituição), suggestion (instruç
           id: 'err-api-fallback',
           rule: 'Conexão instável (Motor Local Ativado)',
           severity: 'warning',
-          message: 'O Gemini não respondeu. Verifique sua chave VITE_GEMINI_API_KEY no .env.local.',
-          codeSnippet: 'VITE_GEMINI_API_KEY=sua_chave_aqui',
-          fixedSnippet: '# Configure o .env.local e reinicie com npm run dev',
-          suggestion: 'Configure o .env.local e reinicie com npm run dev.',
+          message: 'Não foi possível consultar a IA. O motor local assumiu a análise.',
+          codeSnippet: '—',
+          fixedSnippet: '—',
+          suggestion: 'Tente novamente em instantes.',
           source: 'local',
         }],
       })
