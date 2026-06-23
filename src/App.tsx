@@ -219,7 +219,7 @@ export default function App() {
             <div className="flex gap-2 mt-3">
               <button onClick={handleAnalyze} disabled={loading || !codeInput.trim()}
                 className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-semibold text-xs py-2.5 rounded-lg transition-all cursor-pointer active:scale-[0.99]">
-                {loading ? '🧠 Analisando com Gemini + Validador Semântico...' : '🔍 Analisar Acessibilidade'}
+                {loading ? '🧠 Analisando com IA + Validador Semântico...' : '🔍 Analisar Acessibilidade'}
               </button>
               {codeInput && (
                 <button onClick={handleClear}
@@ -232,7 +232,7 @@ export default function App() {
 
           {usedFallback && (
             <div className="mt-3 p-3 bg-yellow-500/5 border border-yellow-500/20 text-yellow-400 text-xs rounded-lg">
-              ⚠️ <strong>Motor Local ativo:</strong> O Gemini não respondeu. Resultado baseado nas regras locais.
+              ⚠️ <strong>Motor Local ativo:</strong> A IA não respondeu. Resultado baseado nas regras locais.
             </div>
           )}
 
@@ -268,7 +268,7 @@ export default function App() {
               <div className="flex gap-3 mb-4 items-center text-[10px]">
                 <span className="text-slate-400">Origem:</span>
                 <span className="px-1.5 py-0.5 rounded border border-purple-500/40 bg-purple-500/10 text-purple-400 font-bold">IA</span>
-                <span className="text-slate-500">Gemini</span>
+                <span className="text-slate-500">Groq AI</span>
                 <span className="px-1.5 py-0.5 rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 font-bold">LOCAL</span>
                 <span className="text-slate-500">Motor local</span>
               </div>
@@ -341,7 +341,7 @@ export default function App() {
             </div>
             <div className="space-y-3 text-xs text-slate-300 leading-relaxed">
               <p><strong>1. Inserir Código:</strong> Cole um bloco HTML ou componente React no campo principal.</p>
-              <p><strong>2. Executar:</strong> Clique em "Analisar". O Gemini faz a análise semântica e o motor local valida regras críticas em paralelo.</p>
+              <p><strong>2. Executar:</strong> Clique em "Analisar". A IA faz a análise semântica e o motor local valida regras críticas em paralelo.</p>
               <p><strong>3. Resultados:</strong> Cada erro mostra a regra WCAG, o trecho com problema e o trecho corrigido lado a lado com botão de copiar.</p>
               <p><strong>4. Código completo:</strong> No final veja o HTML original vs. corrigido com botão para copiar tudo.</p>
               <p><strong>5. Exportar:</strong> Baixe o relatório em <strong>.txt</strong> para compartilhar com sua equipe.</p>
